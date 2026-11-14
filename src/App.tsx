@@ -51,7 +51,7 @@ function App() {
     );
     return [...filtered].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "oldest") return b.id - a.id;
+      if (sort === "oldest") return a.id - b.id;
       return b.id - a.id;
     });
   }, [projects, query, sort]);
