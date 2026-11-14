@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import {
-  Activity, Bell, BookOpen, CheckSquare, ChevronDown, Clock3, Code2,
-  Command, FileText, Folder, FolderOpen, Grid2X2, Home, Layers3, List,
-  LogOut, Menu, MoreHorizontal, Plus, Search, Settings, Sparkles, Star,
-  X, Image as ImageIcon, PanelLeftClose, ArrowUpRight, type LucideIcon,
+  Activity, Bell, BookOpen, CheckSquare, ChevronDown, Clock3, Command,
+  FileText, Folder, Grid2X2, Layers3, List, LogOut, Menu, MoreHorizontal,
+  Plus, Search, Settings, Star, X, PanelLeftClose, ArrowUpRight, type LucideIcon,
 } from "lucide-react";
 
 type Project = {
