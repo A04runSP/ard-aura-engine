@@ -236,6 +236,22 @@ Performance warnings observed:
 
 These are findings to triage, not instructions to blindly change production. Unused-index advice must be evaluated against workload history and expected future queries. Policy consolidation must preserve intended owner/member/editor access semantics. Any fix requires a separate reviewed migration and approval.
 
+
+### Targeted SQL policy/function review
+
+Read-only queries inspected the live `pg_policies` catalog and definitions/ACLs for the advisor-flagged `SECURITY DEFINER` helpers.
+
+- Policies are explicitly scoped to the `authenticated` role.
+- Owner and project-member/editor policies coexist on several resource tables. PostgreSQL permissive policies combine with OR semantics, so the combined effective access must be reasoned about as a whole—not policy-by-policy.
+- Project member/editor policies call `is_project_member`, `is_project_editor`, and `project_member_role`.
+- The helpers `is_project_member`, `is_project_editor`, `project_member_role`, and `user_owns_project_folder` accept a caller-supplied user ID and are executable by `authenticated`. Their bodies return membership/role/ownership facts for the supplied IDs. This creates a potential cross-user/project metadata-oracle surface even though the policies themselves pass `auth.uid()`. Confirm whether public RPC invocation is needed; if not, redesign execution exposure without breaking RLS helper calls.
+- `has_role` rejects a supplied user ID that differs from `auth.uid()`.
+- `search_project_workspace` checks membership for `auth.uid()` and constrains the query to the supplied project ID.
+- `get_user_emails` returns email rows only when `has_role(auth.uid(), 'admin')` succeeds. This is a high-sensitivity function and should remain strictly admin-gated; verify the admin-role assignment and invocation path.
+- The reviewed functions set `search_path` to `public` and qualify sensitive table/function references. Keep this property in any future replacement.
+
+This review does not establish an exploitable data breach. It identifies callable function surfaces and policy combinations that deserve explicit threat-model review and tests using at least owner, editor, viewer, non-member, and admin identities.
+
 ## 8. Existing documentation drift
 
 The supplied roadmap PDF describes folders, persistent search, activity, collaboration, and parts of intelligence as future work. The current live schema and source now contain those systems.
