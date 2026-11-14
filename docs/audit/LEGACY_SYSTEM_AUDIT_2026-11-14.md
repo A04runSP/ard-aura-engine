@@ -323,7 +323,7 @@ Do not create every advanced feature at once. Add search, commands, activity, co
 - [x] Inspect Vercel linked project and production-target deployment history/build error.
 - [ ] Verify production domain alias and intended Vercel production branch with the owner.
 - [ ] Reconcile the stale Supabase local project ref without changing production.
-- [ ] Complete targeted review of SQL RLS policies and SECURITY DEFINER functions.
+- [x] Complete targeted read-only review of SQL RLS policies and SECURITY DEFINER function definitions/ACLs.
 - [ ] Agree first-release feature scope and code workspace inclusion.
 - [ ] Approve final architecture and design tokens.
 
