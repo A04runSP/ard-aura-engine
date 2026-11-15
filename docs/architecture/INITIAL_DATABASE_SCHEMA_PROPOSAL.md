@@ -1,21 +1,23 @@
 # ARD Workspace — Initial Database Schema Proposal
 
-**Status:** Proposed for review; not applied to Supabase  
+**Status:** Decisions finalized; SQL/RLS design prepared for review; not applied to Supabase  
 **Target:** `ard-workspace-db` (Mumbai, `ap-south-1`)  
 **Repository:** `A04runSP/ard-aura-engine`  
 **Branch:** `foundation/architecture-and-structure`  
 **Scope:** Identity, projects, project membership, and project settings only
 
-## 1. Design decisions
+## 1. Finalized design decisions
 
 1. A project is the primary ownership and access boundary.
 2. Supabase Auth (`auth.users`) is the identity authority. Do not duplicate passwords or authentication credentials.
-3. `public.profiles` stores application-facing profile attributes; its primary key is the Auth user UUID.
-4. `public.projects.owner_id` is the canonical owner reference.
-5. `public.project_members` stores additional collaborators. The project owner is not duplicated as a membership row.
-6. Membership roles are deliberately limited to `admin`, `editor`, and `viewer`. Ownership is represented by `projects.owner_id`, not a client-editable role.
-7. `public.project_settings` is a one-to-one extension of a project. Keep only project-level preferences here; do not turn it into a generic resource store.
-8. Every exposed public table must have RLS enabled and least-privilege grants. Frontend checks are not authorization.
+3. `public.profiles` stores application-facing profile attributes; its primary key is the Auth user UUID. **Profile creation is lazy:** create the profile during the first authenticated onboarding flow, not through an automatic Auth signup trigger.
+4. `public.projects.owner_id` is the canonical owner reference. The owner is not duplicated in `project_members`.
+5. `public.project_members` stores additional collaborators. Roles are `admin`, `editor`, and `viewer`; ownership is represented only by `projects.owner_id`.
+6. **Member visibility:** every project member, including the owner, can read the complete member list for that project.
+7. **Limited admin authority:** admins can manage editor/viewer memberships only. They cannot create, promote, demote, modify, or remove admin memberships. Only the project owner can manage admin memberships.
+8. **Project deletion:** the initial product supports owner-controlled soft archive through `archived_at`. No client hard-delete operation or permanent-delete UI is included in v1.
+9. **Initial settings:** `project_settings.preferences` starts as an empty JSON object. Do not predefine theme/layout/visibility settings until a concrete product requirement exists.
+10. Every exposed public table must have RLS enabled and least-privilege grants. Frontend checks are not authorization.
 
 ## 2. Entity relationship
 
@@ -50,7 +52,7 @@ profiles (member user)
 | `created_at` | timestamptz | Not null, default `now()` |
 | `updated_at` | timestamptz | Not null, default `now()` |
 
-No email copy in this first profile table: Auth remains the source of truth for email. A profile row may be created during the first authenticated onboarding flow; an automatic Auth trigger is a separate implementation decision.
+No email copy: Auth remains the source of truth. The onboarding use case creates the profile lazily and handles the existing-row case safely. No Auth signup trigger in this phase.
 
 ### 3.2 `public.projects`
 
@@ -64,7 +66,7 @@ No email copy in this first profile table: Auth remains the source of truth for 
 | `updated_at` | timestamptz | Not null, default `now()` |
 | `archived_at` | timestamptz | Nullable; soft archive, not deletion |
 
-Do not add a globally unique slug yet. There is no confirmed routing or product requirement for it. Project names need not be globally unique.
+No globally unique slug. Project names need not be globally unique. Owner transfer is out of scope and must not be possible through ordinary client updates.
 
 ### 3.3 `public.project_members`
 
@@ -77,11 +79,12 @@ Do not add a globally unique slug yet. There is no confirmed routing or product 
 | `invited_by` | uuid | Nullable FK to `auth.users(id)`, set null on deletion |
 | `joined_at` | timestamptz | Not null, default `now()` |
 
-Constraints:
+Constraints and indexes:
 - Unique `(project_id, user_id)`.
 - Index `(user_id, project_id)` for listing a user's projects.
 - Index `(project_id, role)` for project member/role lookups.
-- Do not allow a user to add themselves as a member by directly submitting an arbitrary project ID. Membership creation must be authorized by the project owner/admin or a later invitation-acceptance workflow.
+- The owner is not inserted as a member.
+- No self-join or arbitrary project-ID membership insertion. Membership creation is restricted to owner/admin authority and the limited role rules above.
 
 ### 3.4 `public.project_settings`
 
@@ -92,41 +95,49 @@ Constraints:
 | `created_at` | timestamptz | Not null, default `now()` |
 | `updated_at` | timestamptz | Not null, default `now()` |
 
-Use typed columns for settings that become queryable or security-sensitive. JSONB is only for low-risk, evolving presentation preferences; never store authorization roles or access grants in this JSON.
+JSONB is only for low-risk, evolving presentation preferences. Never store roles, permissions, ownership, or access grants in it.
 
-## 4. Authorization model
-
-All policies use the authenticated identity from `auth.uid()`. Do not use user-editable `raw_user_meta_data` as an authorization source.
+## 4. Final authorization matrix
 
 | Resource | Read | Create | Update | Delete |
 |---|---|---|---|---|
-| Profile | Own row | Own row | Own row | No client delete in v1 |
-| Project | Owner or project member | Authenticated user sets own `owner_id` | Owner or admin; owner transfer handled separately | Owner only; soft archive preferred |
-| Project member | Project owner/admin and project members, subject to member-list visibility decision | Owner/admin only | Owner/admin only | Owner/admin only |
-| Project settings | Owner or project member | Owner/admin | Owner/admin | Owner only |
+| Profile | Own row | Own row, lazily in onboarding | Own row | No client delete |
+| Project | Owner and all project members | Authenticated user creates as owner | Owner/admin for ordinary project fields; owner ID immutable | No hard delete; owner may soft archive |
+| Project member | Owner and every project member see all rows for that project | Owner may add admin/editor/viewer; admin may add editor/viewer only | Owner may manage all membership roles; admin may manage editor/viewer rows and keep them editor/viewer | Owner may remove any member; admin may remove editor/viewer only |
+| Project settings | Owner and all project members | Owner/admin during project creation | Owner/admin | No direct client delete |
 
-RLS implementation requirements:
+Additional constraints:
+- Admins cannot modify or remove other admins.
+- Admins cannot promote an editor/viewer to admin.
+- No member can modify their own role unless they also have owner authority (the owner is not represented as a membership row).
+- Only the owner can set or clear `archived_at`.
+- No browser operation can change `owner_id` or hard-delete a project.
+
+## 5. SQL/RLS implementation design
+
+The companion document `INITIAL_DATABASE_SQL_AND_RLS_IMPLEMENTATION_PLAN.md` contains the staged SQL blueprint, policy predicates, helper-function security boundaries, transaction design, and verification matrix.
+
+Key implementation rules:
 - Enable RLS on all four tables.
-- Add explicit grants only for the operations the browser app needs.
-- Every project-scoped policy must verify ownership or a row in `project_members`.
-- Project UPDATE policies require both `USING` and `WITH CHECK`.
-- A member must not be able to change `projects.owner_id`.
-- A member must not be able to elevate their own role or alter another user's membership.
-- Avoid recursive RLS policy dependencies. If policy helpers are required, review their execution context and grants; do not casually introduce `SECURITY DEFINER`.
-- Keep Auth-user deletion, ownership transfer, and last-owner protection as explicit lifecycle workflows.
+- Use explicit grants; do not rely on project-wide default grants.
+- Use `TO authenticated` plus ownership/membership predicates. Authentication alone is not authorization.
+- Use both `USING` and `WITH CHECK` for UPDATE policies.
+- Use narrowly scoped, non-exposed `private` helper functions for membership/role predicates where needed to avoid recursive RLS evaluation. Any SECURITY DEFINER helper must validate `auth.uid()`, pin `search_path`, fully qualify referenced objects, and have EXECUTE revoked from PUBLIC/anon.
+- Keep project creation atomic: a narrowly scoped SECURITY INVOKER RPC inserts the project and its default settings in one transaction, with RLS still enforced.
+- Keep archive as a separate owner-checked operation; do not grant direct client update access to `archived_at`.
+- Do not add a permanent-delete endpoint.
+- Timestamp maintenance must use one consistent database trigger pattern or one consistent application strategy.
 
-## 5. Index and integrity plan
+## 6. Index and integrity plan
 
 Required indexes beyond primary/unique constraints:
 - `projects(owner_id, updated_at desc)`
 - `project_members(user_id, project_id)`
 - `project_members(project_id, role)`
 
-Foreign-key columns used for joins or policy checks should be indexed. Add only indexes supported by actual query paths; review query plans as usage develops.
+Review all foreign-key columns used by joins and policy checks. Avoid speculative indexes. Use consistent `updated_at` maintenance.
 
-Timestamp maintenance should be consistent. Choose either application-supplied `updated_at` values or a shared database trigger pattern; do not mix inconsistent approaches across tables.
-
-## 6. Deliberately excluded from this first domain
+## 7. Deliberately excluded from this first domain
 
 Do not create these tables yet:
 - Notes, tasks, stories, scenes, scripts.
@@ -134,36 +145,27 @@ Do not create these tables yet:
 - Invitations, notifications, activity, search documents.
 - Subscriptions, billing, creator access, AI memory/context, audit-event pipeline.
 
-Those domains require their own workflow and access review. This first schema is not a generic catch-all.
+Each domain requires its own workflow and access review. This first schema is not a generic catch-all.
 
-## 7. Creation and onboarding flow
+## 8. Onboarding and project lifecycle
 
 1. User signs in through Supabase Auth.
-2. App loads or creates the user's profile row.
+2. On first authenticated onboarding, app loads or creates the user's profile row (lazy profile creation; safe to retry).
 3. User submits project name and optional description.
-4. A controlled project-creation use case inserts a project with `owner_id = auth.uid()`.
-5. It creates the default `project_settings` row.
-6. Project list queries return only projects owned by the user or where the user has a membership row.
-7. Collaborators are added only through an authorized owner/admin workflow.
-
-The project and default settings should be created atomically. Prefer a narrowly scoped database function or a trusted application transaction path after its security design is reviewed; do not rely on two unrelated browser requests that can leave a half-created project.
-
-## 8. Decisions requiring confirmation before migration
-
-1. **Profile creation:** create profile lazily during onboarding, or automatically after Auth signup?
-2. **Project deletion:** soft archive only in the UI, with hard deletion reserved for a later owner-only workflow?
-3. **Member visibility:** can every project member see the full member list, or only owners/admins?
-4. **Admin permissions:** may project admins manage other admins, or only editors/viewers?
-5. **Settings:** are any project settings needed in the first persisted-project release beyond an empty preferences object?
+4. A controlled project-creation RPC inserts the project with `owner_id = auth.uid()` and inserts the empty default settings row atomically.
+5. Project list queries return only projects owned by the user or where the user has a membership row, excluding archived projects from the normal active list.
+6. Owner/admin collaborator workflows enforce the limited admin role rules at the database boundary.
+7. Owner archives a project by setting `archived_at`; permanent deletion is not exposed in v1.
 
 ## 9. Migration gate
 
-This document is a proposal, not a migration. Before implementation:
-- Review the entity model and role matrix.
-- Finalize the five decisions above.
-- Write and review SQL, constraints, indexes, grants, and RLS policies together.
-- Run Supabase security and performance advisors after applying to the new database.
-- Verify policies using separate authenticated test identities and unauthorized-access tests.
-- Generate and commit a proper migration file to the development branch.
+This document and its companion SQL plan are design artifacts only. Before implementation:
+- Review the complete SQL draft and role matrix.
+- Verify Data API exposure and default privilege settings for the new Supabase project.
+- Create a migration using the Supabase CLI migration workflow only after explicit implementation approval.
+- Apply only to `ard-workspace-db`, never the legacy database.
+- Run Supabase security/performance advisors after DDL.
+- Test with separate owner, admin, editor, viewer, unrelated authenticated user, and unauthenticated request contexts.
+- Verify both allowed and denied operations, including role escalation, owner-ID tampering, archive attempts, and hard-delete attempts.
 
-No legacy database, production schema, or production deployment is part of this proposal.
+**Current state:** No migration has been applied; no tables, policies, functions, or schema objects have been created in Supabase.
