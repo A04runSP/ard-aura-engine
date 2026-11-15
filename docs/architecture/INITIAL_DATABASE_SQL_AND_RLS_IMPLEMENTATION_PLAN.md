@@ -376,3 +376,177 @@ No SQL in this document has been executed. No tables, functions, policies, grant
 - Run a static SQL review and test against a disposable local Supabase/Postgres environment.
 - Obtain explicit user approval to create the migration and apply it to `ard-workspace-db`.
 - After application, run Supabase security and performance advisors and execute the full actor matrix.
+
+
+---
+
+## 12. Security review revision — authoritative corrections
+
+This section supersedes any conflicting wording in Sections 5, 6, 7, 8, 9, and 11. It resolves the previously open archive-function question and makes the role checks explicit. It is still a design draft, not an applied migration.
+
+### 12.1 Archive operation — corrected privilege boundary
+
+Do **not** grant authenticated users direct UPDATE privilege on `projects.archived_at`. The archive operation must use a narrowly scoped `SECURITY DEFINER` RPC because the operation intentionally updates a column withheld from ordinary client UPDATE grants.
+
+The RPC is safe only with all of these controls:
+- Function owner is a trusted database owner role (normally `postgres`).
+- Function is in the exposed `public` schema only because the browser must call it through RPC.
+- `search_path` is pinned to `pg_catalog`; all application objects are schema-qualified.
+- Function accepts only a project UUID, derives the caller from `auth.uid()`, and never accepts a user ID or owner ID argument.
+- Function rejects null identity and updates only a project whose `owner_id = auth.uid()`.
+- EXECUTE is revoked from `PUBLIC` and `anon`, and granted only to `authenticated`.
+- No hard-delete operation is created.
+
+Corrected archive function:
+
+```sql
+create or replace function public.archive_project(p_project_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication required' using errcode = '28000';
+  end if;
+
+  update public.projects
+     set archived_at = pg_catalog.now(),
+         updated_at = pg_catalog.now()
+   where id = p_project_id
+     and owner_id = (select auth.uid())
+     and archived_at is null;
+
+  if not found then
+    raise exception 'Project not found or archive not permitted'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.archive_project(uuid) from public, anon, authenticated;
+grant execute on function public.archive_project(uuid) to authenticated;
+```
+
+This function must be owned by the trusted database owner, and the migration review must verify its owner and ACL after creation. This is the one intentional public-schema SECURITY DEFINER RPC; it must not be generalized into a generic update/delete function.
+
+### 12.2 Helper function hardening
+
+The three `private` helper functions (`is_project_member`, `has_project_role`, `is_project_owner`) remain SECURITY DEFINER solely to avoid recursive RLS checks when a policy needs to inspect `project_members` or `projects`.
+
+Before approval, verify:
+- `private` is not in the exposed Data API schemas.
+- No untrusted role has CREATE on `private`.
+- Each helper is owned by a trusted database role.
+- Each helper has a pinned `search_path`, fully qualified object references, and derives the subject exclusively from `auth.uid()`.
+- EXECUTE is revoked from PUBLIC/anon and granted to authenticated only.
+- No helper returns membership rows, role names, or other data; boolean only.
+- Calls in row policies are wrapped as scalar subqueries, e.g. `(select private.is_project_member(project_id))`, where the result is row-independent except for its explicit argument.
+
+### 12.3 Exact membership policy predicates
+
+The final policy set must use these predicates; do not replace them with a broad "owner or admin" check that loses the current-row/new-row role distinction.
+
+Let:
+- `owner(project_id)` mean `(select private.is_project_owner(project_id))`.
+- `member(project_id)` mean `(select private.is_project_member(project_id))`.
+- `admin(project_id)` mean `(select private.has_project_role(project_id, array['admin']::text[]))`.
+
+**SELECT** on `project_members`:
+```sql
+using (
+  (select private.is_project_owner(project_id))
+  or (select private.is_project_member(project_id))
+)
+```
+
+**INSERT** on `project_members`:
+```sql
+with check (
+  invited_by = (select auth.uid())
+  and user_id <> (
+    select p.owner_id from public.projects p where p.id = project_id
+  )
+  and (
+    (select private.is_project_owner(project_id))
+    or (
+      (select private.has_project_role(project_id, array['admin']::text[]))
+      and role in ('editor', 'viewer')
+    )
+  )
+)
+```
+Owner may add any permitted membership role; admin may add editor/viewer only. The projects SELECT policy must allow project members to see the project row used in the owner exclusion subquery.
+
+**UPDATE** on `project_members`:
+```sql
+using (
+  (select private.is_project_owner(project_id))
+  or (
+    role in ('editor', 'viewer')
+    and (select private.has_project_role(project_id, array['admin']::text[]))
+  )
+)
+with check (
+  (select private.is_project_owner(project_id))
+  or (
+    role in ('editor', 'viewer')
+    and (select private.has_project_role(project_id, array['admin']::text[]))
+  )
+)
+```
+The client receives UPDATE privilege on `role` only, not `project_id`, `user_id`, `invited_by`, or `id`. The policy evaluates the old row in USING and the new row in WITH CHECK. This prevents an admin from changing an editor/viewer to admin. The owner can assign any allowed role.
+
+**DELETE** on `project_members`:
+```sql
+using (
+  (select private.is_project_owner(project_id))
+  or (
+    role in ('editor', 'viewer')
+    and (select private.has_project_role(project_id, array['admin']::text[]))
+  )
+)
+```
+The owner may remove any member. Admin may remove only editor/viewer rows. Since owner identity is stored on `projects`, not as a membership row, no membership delete can remove the owner.
+
+### 12.4 Column-level grants and table privileges
+
+The migration must use explicit table grants, followed by narrow column grants where appropriate. In particular:
+- `projects`: authenticated SELECT and INSERT; UPDATE only `name` and `description` (the trigger maintains `updated_at`). No UPDATE on `owner_id` or `archived_at`; no DELETE.
+- `project_members`: authenticated SELECT, INSERT on `project_id, user_id, role, invited_by`, UPDATE on `role` only, DELETE. RLS controls which rows and roles are allowed.
+- `project_settings`: authenticated SELECT, INSERT, UPDATE on `preferences` only; no DELETE.
+- `profiles`: authenticated SELECT, INSERT on `id, display_name, avatar_path`, UPDATE on `display_name, avatar_path` only; no DELETE.
+- `anon`: no table privileges.
+- Revoke unintended default privileges for future objects in `public` and explicitly review Data API exposure settings.
+
+The project-creation SECURITY INVOKER RPC can insert a project and settings row only if the authenticated caller has the required INSERT grants and both INSERT policies permit the rows. A single RPC call is one transaction; a settings insert failure rolls back the project insert. Keep EXECUTE on the RPC restricted to authenticated users.
+
+### 12.5 Project and settings policy refinements
+
+- Project SELECT: owner or project member; include archived projects in owner/member visibility so archive management remains possible. The active project list filters `archived_at is null` in the application query; archive view filters non-null.
+- Project INSERT: `owner_id = (select auth.uid())`.
+- Project UPDATE: owner or admin, but only ordinary editable columns are granted. Both USING and WITH CHECK must require owner/admin. The caller cannot change `owner_id` or `archived_at`.
+- Project settings SELECT: owner or any member.
+- Project settings INSERT/UPDATE: owner or admin. UPDATE has both USING and WITH CHECK. Only `preferences` is client-updatable.
+- No DELETE policy on projects, profiles, or project_settings.
+
+### 12.6 Remaining implementation cautions
+
+1. **Profile lazy upsert:** use authenticated user's own UUID; the upsert conflict path requires SELECT and UPDATE permissions/policies as well as INSERT. Verify Supabase JS upsert behavior with the exact grants before wiring onboarding.
+2. **Project creation RPC:** test the invoker's INSERT privileges and RLS checks for both tables. Do not switch to SECURITY DEFINER merely to make it pass.
+3. **Project settings INSERT policy:** project owner/admin membership must be checked against the newly inserted project; validate the cross-table RLS interaction in a real disposable Postgres/Supabase environment.
+4. **Membership insert policy:** the owner-exclusion subquery depends on the caller being able to SELECT the project row. Confirm that SELECT policy and helper function permissions are in place.
+5. **Trigger function:** the trigger function should be owned by a trusted role, pin search_path, fully qualify `pg_catalog.now()`, and have no direct client EXECUTE grant.
+6. **No claims of runtime validation:** this environment currently has no `psql`, `postgres`, `docker`, or `supabase` CLI available. Therefore SQL parser/database execution and actor-matrix tests have **not** been run. This is a static security review only.
+
+### 12.7 Revised apply gate
+
+Before any database change:
+- Resolve the cross-table RLS behavior for settings INSERT and member INSERT in an isolated Supabase/Postgres test project.
+- Validate all function ownership, ACLs, search_path values, table grants, column grants, and policy expressions.
+- Run actor-matrix tests for owner/admin/editor/viewer/unrelated/anon identities, including attempted role escalation and owner-ID/archive tampering.
+- Run Supabase security and performance advisors after DDL.
+- Obtain separate explicit approval to create a migration and separate explicit approval to apply it to `ard-workspace-db`.
+
+**No SQL has been executed against the target database. No migration has been created or applied.**
