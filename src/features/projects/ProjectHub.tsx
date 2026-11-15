@@ -33,7 +33,7 @@ const navItems: { label: string; icon: LucideIcon }[] = [
   { label: "Activity", icon: Activity },
 ];
 
-function App() {
+function ProjectHub() {
   const [projects, setProjects] = useState(initialProjects);
   const [activeNav, setActiveNav] = useState("Project Hub");
   const [query, setQuery] = useState("");
@@ -199,4 +199,4 @@ function ActivityItem({ icon: Icon, title, detail, time }: { icon: LucideIcon; t
   return <div className="activity-item"><span className="activity-icon"><Icon size={18}/></span><div><b>{title}</b><span>{detail}</span><small>{time}</small></div></div>;
 }
 
-export default App;
+export default ProjectHub;
