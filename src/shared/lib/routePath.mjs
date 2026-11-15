@@ -5,9 +5,9 @@ const knownRoutes = new Map([
 
 export function normalizePath(pathname) {
   const withLeadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  const collapsed = withLeadingSlash.replace(/\\/{2,}/g, "/");
+  const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
   if (collapsed === "/") return "/";
-  return collapsed.replace(/\\/+$/, "");
+  return collapsed.replace(/\/+$/, "");
 }
 
 export function resolveRoute(pathname) {
