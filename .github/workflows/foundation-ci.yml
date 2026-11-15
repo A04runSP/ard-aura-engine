@@ -3,13 +3,13 @@ name: Foundation CI
 on:
   push:
     branches:
-      - foundation/architecture-and-structure
+      - stage-1/foundation-implementation
   pull_request:
     branches:
-      - main
+      - foundation/architecture-and-structure
 
 jobs:
-  build:
+  foundation:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -17,8 +17,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 26
       - name: Install dependencies
         run: npm install
-      - name: Type-check and build
-        run: npm run build
+      - name: Run foundation checks
+        run: npm run check
