@@ -1,0 +1,30 @@
+:root {
+  color-scheme: dark;
+  font-family: "DM Sans", sans-serif;
+  color: #f4eeea;
+  background: #0d0b0b;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  font-weight: 400;
+
+  /* ARD Aura Workspace — foundation palette */
+  --bg: #0d0b0b;
+  --panel: #151111;
+  --panel-2: #1a1413;
+  --line: rgba(255, 235, 225, 0.1);
+  --muted: #a99c97;
+  --soft: #d0c4bf;
+  --red: #f0442e;
+  --orange: #ff7847;
+  --gold: #f4a64d;
+
+  /* Typography */
+  --font-body: "DM Sans", sans-serif;
+  --font-display: "Manrope", sans-serif;
+
+  /* Layout */
+  --sidebar-width: 252px;
+  --sidebar-collapsed-width: 76px;
+  --content-max-width: 1440px;
+}
