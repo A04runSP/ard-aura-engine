@@ -2,27 +2,25 @@
 
 ## CSS unit conventions
 
-| Unit | Primary meaning             | Preferred use                            |
-| ---- | --------------------------- | ---------------------------------------- |
-| px   | CSS pixel                   | Borders, shadows, fine visual details    |
-| %    | Relative to containing block | Flexible widths and layout proportions  |
-| vw   | Viewport width              | Viewport-relative sections and fluid scaling |
-| em   | Current element font size   | Component-local padding and sizing      |
-| rem  | Root font size              | Typography, global spacing and consistent sizing |
+- `px`: CSS pixels for borders, shadows, and fine visual details.
+- `%`: relative to the containing block for flexible widths and layout proportions.
+- `vw`: relative to viewport width for viewport-relative sections and fluid scaling.
+- `em`: relative to the current element's font size for component-local padding and sizing.
+- `rem`: relative to the root font size for typography, global spacing, and consistent sizing.
 
 These are defaults, not prohibitions. Choose the unit that matches the sizing relationship.
 
 ## Fluid sizing
 
 - Use `clamp(min, preferred, max)` for fluid typography and page gutters.
-- Use `min()`, `max()` and `minmax()` to constrain layouts.
+- Use `min()`, `max()`, and `minmax()` to constrain layouts.
 - Prefer Grid and Flexbox over fixed-position layout for primary page structure.
 - Use content-driven breakpoints where the layout needs to change, not device labels alone.
 
 ## Viewport and device behaviour
 
 - Use `100dvh` when a full-height mobile layout must account for changing browser chrome.
-- Test narrow mobile, wide mobile, tablet and desktop widths.
+- Test narrow mobile, wide mobile, tablet, and desktop widths.
 - Prevent horizontal overflow at every supported width.
 - Preserve readable line lengths with a content max-width.
 - Respect `prefers-reduced-motion`.
