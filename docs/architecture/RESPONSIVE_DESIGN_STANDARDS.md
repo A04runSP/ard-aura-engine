@@ -2,13 +2,13 @@
 
 ## CSS unit conventions
 
-| Unit | Primary meaning | Preferred use |
-| --- | --- | --- |
-| px | CSS pixel | Borders, shadows, fine visual details |
-| % | Relative to containing block | Flexible widths and layout proportions |
-| vw | Viewport width | Viewport-relative sections and fluid scaling |
-| em | Current element font size | Component-local padding and sizing |
-| rem | Root font size | Typography, global spacing and consistent sizing |
+| Unit | Primary meaning             | Preferred use                            |
+| ---- | --------------------------- | ---------------------------------------- |
+| px   | CSS pixel                   | Borders, shadows, fine visual details    |
+| %    | Relative to containing block | Flexible widths and layout proportions  |
+| vw   | Viewport width              | Viewport-relative sections and fluid scaling |
+| em   | Current element font size   | Component-local padding and sizing      |
+| rem  | Root font size              | Typography, global spacing and consistent sizing |
 
 These are defaults, not prohibitions. Choose the unit that matches the sizing relationship.
 
