@@ -24,5 +24,7 @@ jobs:
           cache: npm
       - name: Install exact locked dependencies
         run: npm ci
+      - name: Print canonical TextField formatting for diagnosis
+        run: npx prettier src/shared/components/TextField.tsx
       - name: Run foundation checks
         run: npm run check
