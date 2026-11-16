@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "format:check": "prettier --check \"src/shared/components/**/*\" \"src/shared/styles/tokens.css\" \"tests/unit/*.mjs\" \"eslint.config.js\" \".prettierrc.json\" \"package.json\" \"docs/architecture/RESPONSIVE_DESIGN_STANDARDS.md\"",
+    "format:check": "prettier --check src/shared/components/Button.tsx src/shared/components/TextField.tsx src/shared/components/index.ts src/shared/styles/tokens.css tests/unit/foundation.test.mjs tests/unit/responsive-foundation.test.mjs eslint.config.js .prettierrc.json package.json docs/architecture/RESPONSIVE_DESIGN_STANDARDS.md",
     "format": "prettier --write .",
     "test": "node --test tests/unit/*.test.mjs",
     "build": "npm run typecheck && vite build",

@@ -13,7 +13,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const inputId = id ?? `ard-field-${props.name ?? "input"}`;
   const hintId = hint ? `${inputId}-hint` : undefined;
   const errorId = error ? `${inputId}-error` : undefined;
-  const describedBy = [hintId, errorId, props["aria-describedby"]].filter(Boolean).join(" ") || undefined;
+  const describedBy =
+    [hintId, errorId, props["aria-describedby"]].filter(Boolean).join(" ") || undefined;
 
   return (
     <div className="ard-field">
@@ -28,12 +29,24 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         required={required}
         aria-invalid={error ? true : props["aria-invalid"]}
         aria-describedby={describedBy}
-        className={[`ard-field__input`, error ? "ard-field__input--error" : "", className]
+        className={[
+          "ard-field__input",
+          error ? "ard-field__input--error" : "",
+          className,
+        ]
           .filter(Boolean)
           .join(" ")}
       />
-      {hint && <p className="ard-field__hint" id={hintId}>{hint}</p>}
-      {error && <p className="ard-field__error" id={errorId} role="alert">{error}</p>}
+      {hint && (
+        <p className="ard-field__hint" id={hintId}>
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p className="ard-field__error" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 });

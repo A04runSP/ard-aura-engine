@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const tokens = await readFile(new URL("../../src/shared/styles/tokens.css", import.meta.url), "utf8");
+const tokens = await readFile(
+  new URL("../../src/shared/styles/tokens.css", import.meta.url),
+  "utf8",
+);
 
 test("responsive typography uses a fluid clamp scale", () => {
   assert.match(tokens, /--text-display:\s*clamp\(/);
