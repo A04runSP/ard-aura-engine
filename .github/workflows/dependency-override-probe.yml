@@ -8,30 +8,35 @@ on:
       - .github/workflows/dependency-override-probe.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  probe:
+  validate-and-commit:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Stage 1 branch
         uses: actions/checkout@v4
-        with:
-          ref: stage-1/foundation-implementation
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 26
           cache: npm
-      - name: Configure isolated minimatch override candidate
+      - name: Apply scoped minimatch security override
         run: npm pkg set 'overrides.@typescript-eslint/typescript-estree.minimatch=^11.0.1'
-      - name: Resolve candidate lockfile without lifecycle scripts
+      - name: Regenerate exact lockfile
         run: npm install --package-lock-only --ignore-scripts
-      - name: Install candidate dependency tree
+      - name: Install exact candidate dependency tree
         run: npm ci
-      - name: Report minimatch resolution
+      - name: Verify resolved minimatch versions
         run: npm ls minimatch
-      - name: Run full foundation checks
+      - name: Run all foundation checks
         run: npm run check
-      - name: Run candidate dependency audit
+      - name: Require a clean dependency audit
         run: npm audit --audit-level=low
+      - name: Commit only the validated dependency manifest and lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "Fix minimatch advisory in TypeScript ESLint dependency"
+          git push origin HEAD:stage-1/foundation-implementation
