@@ -22,9 +22,75 @@
   /* Typography */
   --font-body: "DM Sans", sans-serif;
   --font-display: "Manrope", sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-display: clamp(1.8rem, 4vw, 3.5rem);
+
+  /* Spacing: rem for root-scaled rhythm, em for component-local padding */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
 
   /* Layout */
   --sidebar-width: 252px;
   --sidebar-collapsed-width: 76px;
   --content-max-width: 1440px;
+  --page-gutter: clamp(1rem, 3vw, 2.5rem);
+  --control-min-height: 2.75rem;
+  --focus-ring: 0 0 0 3px rgba(255, 120, 71, 0.35);
+}
+
+/* Shared primitive foundations */
+.ard-button {
+  display: inline-flex;
+  min-height: var(--control-min-height);
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 0.65em 1.1em;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  color: inherit;
+  background: var(--panel-2);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.ard-button:hover:not(:disabled) { border-color: var(--orange); }
+.ard-button:active:not(:disabled) { transform: translateY(1px); }
+.ard-button:focus-visible, .ard-field__input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.ard-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.ard-button--primary { color: #170d09; background: var(--orange); border-color: transparent; }
+.ard-button--danger { color: #fff; background: #9f3028; border-color: transparent; }
+.ard-button--ghost { background: transparent; border-color: transparent; }
+
+.ard-field { display: grid; gap: var(--space-2); }
+.ard-field__label { color: var(--soft); font-size: var(--text-sm); font-weight: 600; }
+.ard-field__input {
+  width: 100%;
+  min-height: var(--control-min-height);
+  padding: 0.7em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  color: inherit;
+  background: var(--panel);
+  font: inherit;
+}
+.ard-field__input--error { border-color: #f06a5f; }
+.ard-field__hint, .ard-field__error { margin: 0; font-size: var(--text-xs); }
+.ard-field__hint { color: var(--muted); }
+.ard-field__error { color: #ff8a80; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
