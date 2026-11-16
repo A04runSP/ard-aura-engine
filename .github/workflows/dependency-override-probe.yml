@@ -1,7 +1,11 @@
 name: Dependency Override Compatibility Probe
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - stage-1/foundation-implementation
+    paths:
+      - .github/workflows/dependency-override-probe.yml
 
 permissions:
   contents: read
